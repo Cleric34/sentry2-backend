@@ -11,8 +11,6 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Load the EXISTING mastitis model bundled with this backend.
-# The model file itself is unchanged.
 from ml_pipeline.mastitis_model import MastitisPredictiveEngine
 
 
@@ -70,6 +68,10 @@ ph_data = pd.read_csv(BASE_DIR / "ph.csv")
 milk_data = pd.read_csv(BASE_DIR / "milk_yield.csv")
 
 data_index = 0
+
+# Latest received/processed packet for live monitoring.
+# This does not modify the ML model or its logic.
+latest_sensor_state = None
 
 # Backend-selected cow.
 # ESP32 does NOT need to send cow_id.
@@ -176,12 +178,27 @@ def select_cow(selection: CowSelection):
 
 
 # ============================================================
+# LIVE SENSOR MONITOR
+# ============================================================
+
+@app.get("/latest-sensor")
+def latest_sensor():
+    if latest_sensor_state is None:
+        return {
+            "success": True,
+            "message": "No sensor data received yet."
+        }
+
+    return make_json_safe(latest_sensor_state)
+
+
+# ============================================================
 # LIVE SENSOR ENDPOINT
 # ============================================================
 
 @app.post("/sensor-data")
 def receive_sensor_data(data: SensorData):
-    global data_index
+    global data_index, latest_sensor_state
 
     # --------------------------------------------------------
     # 1. Find currently selected cow
@@ -420,4 +437,5 @@ def receive_sensor_data(data: SensorData):
         "prediction": prediction,
     }
 
+    latest_sensor_state = response
     return make_json_safe(response)
