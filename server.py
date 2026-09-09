@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import math
-import sys
 from pathlib import Path
 
 # ============================================================
@@ -12,15 +11,8 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Load the SENTRY 2 mastitis engine from the project ZIP
-PROJECT_ROOT = (
-    BASE_DIR.parent
-    / "SIH_Project"
-    / "SIH_Project"
-)
-
-sys.path.append(str(PROJECT_ROOT))
-
+# Load the EXISTING mastitis model bundled with this backend.
+# The model file itself is unchanged.
 from ml_pipeline.mastitis_model import MastitisPredictiveEngine
 
 
