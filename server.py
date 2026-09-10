@@ -82,17 +82,20 @@ def receive_sensor_data(data: SensorData):
     global latest_sensor_state
 
     latest_sensor_state = {
-        "temperature": data.temperature,
-        "tds_raw": data.tds_raw,
-        "tds_voltage": data.tds_voltage,
+        "temperature": data.temperature}
+        ,
+        {"tds_raw": data.tds_raw},
+
+        {"tds_voltage": data.tds_voltage},
+        
     }
 
     print()
     print("==============================")
     print("       SENTRY 2 LIVE DATA")
     print("==============================")
-    print(f"Temperature  : {data.temperature:.2f} °C")
-    print(f"TDS Raw      : {data.tds_raw}")
+    print(f"\nTemperature  : {data.temperature:.2f} °C")
+    print(f"\nTDS Raw      : {data.tds_raw}")
     print(f"TDS Voltage  : {data.tds_voltage:.6f} V")
     print("==============================")
 
