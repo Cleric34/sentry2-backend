@@ -1,26 +1,27 @@
-
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
 
 # ============================================================
-# OLD IMPORTS — KEPT FOR FUTURE USE
+# OLD / FUTURE IMPORTS
 # ============================================================
-
+# These are intentionally commented out for now.
+# They can be restored later when the full ML pipeline is
+# connected to the live sensor data.
+#
 # import pandas as pd
 # import math
 # from pathlib import Path
-
+#
 # BASE_DIR = Path(__file__).resolve().parent
-
-# OLD ML MODEL — DO NOT DELETE
+#
 # from ml_pipeline.mastitis_model import MastitisPredictiveEngine
 
 
 # ============================================================
-# SENTRY 2 - FASTAPI SENSOR SERVER
-# CURRENT MODE:
-# ONLY TEMPERATURE + TDS RAW + TDS VOLTAGE
+# FASTAPI APPLICATION
 # ============================================================
 
 app = FastAPI(
@@ -29,6 +30,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
+# ============================================================
+# CORS
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,14 +45,14 @@ app.add_middleware(
 
 
 # ============================================================
-# CURRENT LIVE SENSOR STATE
+# LATEST SENSOR DATA
 # ============================================================
 
 latest_sensor_state = None
 
 
 # ============================================================
-# REQUEST MODEL
+# SENSOR DATA MODEL
 # ============================================================
 
 class SensorData(BaseModel):
@@ -58,78 +63,11 @@ class SensorData(BaseModel):
 
 
 # ============================================================
-# LIVE SENSOR ENDPOINT
-# ============================================================
-#
-# CURRENTLY ACCEPTS ONLY:
-#   - temperature
-#   - tds_raw
-#   - tds_voltage
-#
-# device_id is accepted only so the current ESP32 JSON format
-# does not need to change.
-#
-# NO pH
-# NO milk yield
-# NO cow data
-# NO ML prediction
-# NO 18-feature processing
-# ============================================================
-
-@app.post("/sensor-data")
-def receive_sensor_data(data: SensorData):
-
-    global latest_sensor_state
-
-    latest_sensor_state = {
-        "temperature": data.temperature}
-        ,
-        {"tds_raw": data.tds_raw},
-
-        {"tds_voltage": data.tds_voltage},
-        
-    }
-
-    print()
-    print("==============================")
-    print("       SENTRY 2 LIVE DATA")
-    print("==============================")
-    print(f"\nTemperature  : {data.temperature:.2f} °C")
-    print(f"\nTDS Raw      : {data.tds_raw}")
-    print(f"TDS Voltage  : {data.tds_voltage:.6f} V")
-    print("==============================")
-
-    return latest_sensor_state
-
-
-# ============================================================
-# LATEST SENSOR DATA
-# ============================================================
-#
-# THIS ENDPOINT ALSO RETURNS ONLY:
-#   temperature
-#   tds_raw
-#   tds_voltage
-# ============================================================
-
-@app.get("/latest-sensor")
-def latest_sensor():
-
-    if latest_sensor_state is None:
-        return {
-            "message": "No sensor data received yet."
-        }
-
-    return latest_sensor_state
-
-
-# ============================================================
-# ROOT
+# ROOT / HEALTH CHECK
 # ============================================================
 
 @app.get("/")
 def root():
-
     return {
         "project": "SENTRY 2",
         "status": "online",
@@ -138,114 +76,136 @@ def root():
 
 
 # ============================================================
+# RECEIVE LIVE ESP32 SENSOR DATA
 # ============================================================
-# OLD BACKEND CODE — KEPT HERE FOR FUTURE RESTORATION
-# ============================================================
-# ============================================================
+
+@app.post("/sensor-data")
+def receive_sensor_data(data: SensorData):
+
+    global latest_sensor_state
+
+    # Store only the live sensor values we currently need.
+    latest_sensor_state = {
+        "temperature": data.temperature,
+        "tds_raw": data.tds_raw,
+        "tds_voltage": data.tds_voltage,
+    }
+
+    # --------------------------------------------------------
+    # Server console output
+    # --------------------------------------------------------
+
+    print()
+    print("==============================")
+    print("       SENTRY 2 LIVE DATA")
+    print("==============================")
+
+    print(f"Temperature : {data.temperature:.3f} °C")
+    print()
+    print(f"TDS Raw     : {data.tds_raw}")
+    print()
+    print(f"TDS Voltage : {data.tds_voltage:.6f} V")
+
+    print("==============================")
+
+    # Return the latest sensor values.
+    return latest_sensor_state
 
 
 # ============================================================
+# GET LATEST SENSOR DATA
+# ============================================================
+
+@app.get(
+    "/latest-sensor",
+    response_class=PlainTextResponse
+)
+def latest_sensor():
+
+    if latest_sensor_state is None:
+        return "No sensor data received yet."
+
+    return (
+        f"Temperature : {latest_sensor_state['temperature']:.3f} °C\n\n"
+        f"TDS Raw     : {latest_sensor_state['tds_raw']}\n\n"
+        f"TDS Voltage : {latest_sensor_state['tds_voltage']:.6f} V"
+    )
+
+
+# ============================================================
+# ============================================================
+# OLD BACKEND / ML PIPELINE
+# ============================================================
+#
+# The following architecture is intentionally NOT active yet.
+#
+# Your current responsibility is:
+#
+# ESP32
+#    ↓
+# Wi-Fi
+#    ↓
+# Internet / HTTP
+#    ↓
+# FastAPI
+#    ↓
+# Receive live sensor data
+#
+# Later this can become:
+#
+# ESP32
+#    ↓
+# Wi-Fi
+#    ↓
+# FastAPI
+#    ↓
+# Combine sensor data with cow profile
+#    ↓
+# Build existing 18-feature schema
+#    ↓
+# Existing MastitisPredictiveEngine
+#
+# DO NOT MODIFY THE EXISTING MODEL.
+#
+# ============================================================
+
+
+# ------------------------------------------------------------
 # OLD DATA LOADING
-# ============================================================
-
-# cow_data = pd.read_csv(BASE_DIR / "cow_data.csv")
-# ph_data = pd.read_csv(BASE_DIR / "ph.csv")
-# milk_data = pd.read_csv(BASE_DIR / "milk_yield.csv")
-
-# data_index = 0
-
-# active_cow_id = "COW_001"
-
-# mastitis_engine = MastitisPredictiveEngine()
-
-
-# ============================================================
-# OLD JSON SAFETY FUNCTION
-# ============================================================
-
-# def make_json_safe(obj):
+# ------------------------------------------------------------
 #
-#     if obj is None:
-#         return None
+# import pandas as pd
 #
-#     if hasattr(obj, "item"):
-#         try:
-#             return obj.item()
-#         except (ValueError, TypeError):
-#             pass
+# cow_data_path = BASE_DIR / "cow_data.csv"
+# ph_data_path = BASE_DIR / "ph.csv"
+# milk_yield_path = BASE_DIR / "milk_yield.csv"
 #
-#     if isinstance(obj, dict):
-#         return {
-#             str(key): make_json_safe(value)
-#             for key, value in obj.items()
-#         }
-#
-#     if isinstance(obj, (list, tuple)):
-#         return [make_json_safe(value) for value in obj]
-#
-#     return obj
+# cow_data = pd.read_csv(cow_data_path)
+# ph_data = pd.read_csv(ph_data_path)
+# milk_yield_data = pd.read_csv(milk_yield_path)
 
 
-# ============================================================
+# ------------------------------------------------------------
 # OLD COW SELECTION
-# ============================================================
-
-# class CowSelection(BaseModel):
-#     cow_id: str
-
-
-# @app.get("/cows")
-# def get_cows():
+# ------------------------------------------------------------
 #
-#     records = cow_data.to_dict(orient="records")
+# active_cow = None
 #
-#     return make_json_safe({
-#         "success": True,
-#         "cows": records,
-#     })
-
-
+#
+# @app.post("/select-cow")
+# def select_cow(...):
+#     ...
+#
+#
 # @app.get("/active-cow")
 # def get_active_cow():
-#
-#     return {
-#         "success": True,
-#         "active_cow_id": active_cow_id,
-#     }
+#     ...
 
 
-# @app.post("/select-cow")
-# def select_cow(selection: CowSelection):
+# ------------------------------------------------------------
+# OLD SENSOR PROCESSING
+# ------------------------------------------------------------
 #
-#     global active_cow_id
-#
-#     cow_id = selection.cow_id.strip()
-#
-#     if cow_id not in cow_data["cow_id"].astype(str).values:
-#         raise HTTPException(
-#             status_code=404,
-#             detail=f"Cow ID '{cow_id}' not found"
-#         )
-#
-#     active_cow_id = cow_id
-#
-#     return {
-#         "success": True,
-#         "active_cow_id": active_cow_id,
-#     }
-
-
-# ============================================================
-# OLD TDS CALCULATION
-# ============================================================
-#
-# KEPT FOR FUTURE USE.
-#
-# IMPORTANT:
-# This was the original generic TDS conversion.
-# It is NOT laboratory calibrated for milk.
-# ============================================================
-
 # def calculate_tds(voltage: float, temperature: float) -> float:
 #
 #     compensation_voltage = voltage / (
@@ -259,152 +219,76 @@ def root():
 #     ) * 0.5
 #
 #     return max(0.0, float(tds))
-
-
-# ============================================================
-# OLD CONDUCTIVITY CALCULATION
-# ============================================================
-
-# def calculate_conductivity(tds: float) -> float:
 #
+#
+# def calculate_conductivity(tds: float) -> float:
 #     return float((tds / 0.5) / 1000.0)
 
 
-# ============================================================
-# OLD SENSOR PROCESSING
-# ============================================================
-
-# def old_receive_sensor_data(data: SensorData):
+# ------------------------------------------------------------
+# OLD SENSOR ENDPOINT
+# ------------------------------------------------------------
 #
-#     global data_index
+# The previous implementation processed:
 #
-#     selected_rows = cow_data[
-#         cow_data["cow_id"].astype(str) == active_cow_id
-#     ]
+# - temperature
+# - TDS
+# - conductivity
+# - milk pH
+# - milk yield
 #
-#     cow = selected_rows.iloc[0]
-#
-#     ph_value = float(
-#         ph_data.iloc[data_index % len(ph_data)]["ph"]
-#     )
-#
-#     milk_yield = float(
-#         milk_data.iloc[data_index % len(milk_data)]["milk_yield"]
-#     )
-#
-#     data_index += 1
-#
-#     estimated_tds = calculate_tds(
-#         data.tds_voltage,
-#         data.temperature,
-#     )
-#
-#     conductivity = calculate_conductivity(
-#         estimated_tds
-#     )
+# This has intentionally been disabled for now.
 
 
-# ============================================================
+# ------------------------------------------------------------
 # OLD 18-FEATURE SCHEMA
-# ============================================================
-
-# features = {
-#     "breed_idx": int(cow["breed_idx"]),
-#     "age_years": float(cow["age_years"]),
-#     "lactation_num": int(cow["lactation_num"]),
-#     "vaccination_status": int(cow["vaccination_status"]),
-#     "prior_mastitis_hist": int(cow["prior_mastitis_hist"]),
-#     "thi_index": None,
-#     "hygiene_score": float(cow["hygiene_score"]),
-#     "concentrate_kg": None,
-#     "water_intake_l": None,
-#     "body_temp": float(data.temperature),
-#     "rumination_mins": None,
-#     "spine_angle": float(cow["spine_angle"]),
-#     "milk_yield_l": milk_yield,
-#     "ec_ms_cm": conductivity,
-#     "milk_ph": ph_value,
-#     "log_scc": None,
-#     "tier1_cv_score": None,
-#     "tier2_cmt_score": None,
-# }
-
-
-# ============================================================
-# OLD PREDICTION PROFILE
-# ============================================================
-
-# prediction_profile = {
-#     "cow_id": active_cow_id,
-#     "breed": "Unknown",
+# ------------------------------------------------------------
 #
-#     "breed_idx": features["breed_idx"],
-#     "age_years": features["age_years"],
-#     "lactation_num": features["lactation_num"],
-#     "vaccination_status": features["vaccination_status"],
-#     "prior_mastitis_hist": features["prior_mastitis_hist"],
-#     "hygiene_score": features["hygiene_score"],
+# The existing ML model expects:
 #
-#     "body_temp": features["body_temp"],
-#     "spine_angle": features["spine_angle"],
-#     "milk_yield_l": features["milk_yield_l"],
-#     "ec_ms_cm": features["ec_ms_cm"],
-#     "milk_ph": features["milk_ph"],
-# }
+# 1.  breed_idx
+# 2.  age_years
+# 3.  lactation_num
+# 4.  vaccination_status
+# 5.  prior_mastitis_hist
+# 6.  thi_index
+# 7.  hygiene_score
+# 8.  concentrate_kg
+# 9.  water_intake_l
+# 10. body_temp
+# 11. rumination_mins
+# 12. spine_angle
+# 13. milk_yield_l
+# 14. ec_ms_cm
+# 15. milk_ph
+# 16. log_scc
+# 17. tier1_cv_score
+# 18. tier2_cmt_score
+#
+# This schema is NOT being modified.
+#
+# The complete feature assembly will be restored when the
+# other data sources are connected.
 
 
-# ============================================================
-# OLD MODEL CALL
-# ============================================================
+# ------------------------------------------------------------
+# OLD MODEL INITIALIZATION
+# ------------------------------------------------------------
+#
+# model = MastitisPredictiveEngine()
+#
+# The model itself must remain unchanged.
 
-# prediction = mastitis_engine.predict_cow_risk(
-#     prediction_profile
-# )
 
-# prediction = make_json_safe(prediction)
+# ------------------------------------------------------------
+# OLD MODEL PREDICTION
+# ------------------------------------------------------------
+#
+# prediction = model.predict(cow_profile)
+#
+# The prediction layer is intentionally disabled for now.
 
 
 # ============================================================
-# OLD RESPONSE
+# END OF SERVER
 # ============================================================
-
-# response = {
-#
-#     "success": True,
-#
-#     "cow_id": active_cow_id,
-#
-#     "device_id": data.device_id,
-#
-#     "live_sensor_data": {
-#         "temperature": data.temperature,
-#         "tds_raw": data.tds_raw,
-#         "tds_voltage": data.tds_voltage,
-#         "estimated_tds_ppm": estimated_tds,
-#         "conductivity_ms_cm": conductivity,
-#     },
-#
-#     "simulated_data": {
-#         "milk_ph": ph_value,
-#         "milk_yield_l": milk_yield,
-#     },
-#
-#     "cow_database": {
-#         "cow_id": active_cow_id,
-#         "breed_idx": cow["breed_idx"],
-#         "age_years": cow["age_years"],
-#         "lactation_num": cow["lactation_num"],
-#         "vaccination_status": cow["vaccination_status"],
-#         "prior_mastitis_hist": cow["prior_mastitis_hist"],
-#         "hygiene_score": cow["hygiene_score"],
-#         "spine_angle": cow["spine_angle"],
-#     },
-#
-#     "features": features,
-#
-#     "prediction": prediction,
-# }
-#
-# latest_sensor_state = response
-#
-# return make_json_safe(response)
