@@ -20,6 +20,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,6 +39,7 @@ def make_json_safe(obj):
     Convert NumPy/Pandas scalar values into normal Python
     values so FastAPI can serialize the response as JSON.
     """
+
     if obj is None:
         return None
 
@@ -100,11 +102,36 @@ class SensorData(BaseModel):
 # SENSOR CALCULATIONS
 # ============================================================
 
+# ------------------------------------------------------------
+# ORIGINAL TDS CALCULATION
+# ------------------------------------------------------------
+# IMPORTANT:
+# This is retained for prototype use.
+#
+# The TDS value is NOT laboratory calibrated because we do not
+# currently have a commercial/reference TDS or EC meter.
+#
+# RO-water measurements from our current prototype:
+#   Raw ≈ 190.6
+#
+# Milk measurements from our current prototype:
+#   Raw ≈ 2761
+#
+# These show clear sensor response/separation, but they are
+# NOT sufficient to establish an absolute biological TDS/EC
+# calibration.
+# ------------------------------------------------------------
+
 def calculate_tds(voltage: float, temperature: float) -> float:
     """
-    Standard TDS-meter conversion used by the current prototype.
-    Temperature-compensated voltage -> ppm.
+    Prototype TDS conversion.
+
+    NOTE:
+    This is a generic TDS-meter conversion and has NOT been
+    experimentally validated against a reference TDS/EC meter
+    for the current milk sensor setup.
     """
+
     compensation_voltage = voltage / (
         1 + 0.02 * (temperature - 25.0)
     )
@@ -118,11 +145,23 @@ def calculate_tds(voltage: float, temperature: float) -> float:
     return max(0.0, float(tds))
 
 
+# ------------------------------------------------------------
+# ORIGINAL CONDUCTIVITY CONVERSION
+# ------------------------------------------------------------
+# Retained for prototype compatibility.
+#
+# This conversion should also be considered UNVERIFIED until
+# the sensor is calibrated against a known EC standard.
+# ------------------------------------------------------------
+
 def calculate_conductivity(tds: float) -> float:
     """
-    Convert TDS ppm to conductivity in mS/cm using the
-    current prototype's 0.5 conversion factor.
+    Prototype conversion from estimated TDS to conductivity.
+
+    NOTE:
+    This is NOT laboratory calibrated for milk.
     """
+
     return float((tds / 0.5) / 1000.0)
 
 
@@ -183,6 +222,7 @@ def select_cow(selection: CowSelection):
 
 @app.get("/latest-sensor")
 def latest_sensor():
+
     if latest_sensor_state is None:
         return {
             "success": True,
@@ -198,11 +238,13 @@ def latest_sensor():
 
 @app.post("/sensor-data")
 def receive_sensor_data(data: SensorData):
+
     global data_index, latest_sensor_state
 
     # --------------------------------------------------------
     # 1. Find currently selected cow
     # --------------------------------------------------------
+
     selected_rows = cow_data[
         cow_data["cow_id"].astype(str) == active_cow_id
     ]
@@ -218,6 +260,7 @@ def receive_sensor_data(data: SensorData):
     # --------------------------------------------------------
     # 2. Loop simulated CSV data
     # --------------------------------------------------------
+
     ph_value = float(
         ph_data.iloc[data_index % len(ph_data)]["ph"]
     )
@@ -231,6 +274,13 @@ def receive_sensor_data(data: SensorData):
     # --------------------------------------------------------
     # 3. Convert live TDS -> conductivity
     # --------------------------------------------------------
+    #
+    # NOTE:
+    # This remains the existing prototype conversion.
+    # It has NOT been scientifically calibrated against a
+    # reference meter for milk.
+    # --------------------------------------------------------
+
     estimated_tds = calculate_tds(
         data.tds_voltage,
         data.temperature,
@@ -290,6 +340,7 @@ def receive_sensor_data(data: SensorData):
     # --------------------------------------------------------
     # 5. Track which features are actually available
     # --------------------------------------------------------
+
     available_features = {
         "cow_id": active_cow_id,
         "breed_idx": features["breed_idx"],
@@ -334,6 +385,7 @@ def receive_sensor_data(data: SensorData):
     # --------------------------------------------------------
     # 7. Run mastitis prediction
     # --------------------------------------------------------
+
     prediction = mastitis_engine.predict_cow_risk(
         prediction_profile
     )
@@ -342,63 +394,81 @@ def receive_sensor_data(data: SensorData):
 
     # --------------------------------------------------------
     # 8. Console output
+    #
+    # ONLY SENSOR VALUES ARE PRINTED.
+    #
+    # Other console output has NOT been deleted.
+    # It is kept commented below for future use.
     # --------------------------------------------------------
+
     print()
     print("==============================")
     print("       SENTRY 2 LIVE DATA")
     print("==============================")
-    print(f"Cow ID       : {active_cow_id}")
-    print(f"Device ID    : {data.device_id}")
+
     print(f"Temperature  : {data.temperature:.2f} °C")
     print(f"TDS Raw      : {data.tds_raw}")
     print(f"TDS Voltage  : {data.tds_voltage:.6f} V")
-    print(f"Estimated TDS: {estimated_tds:.2f} ppm")
-    print(f"Conductivity : {conductivity:.4f} mS/cm")
-    print(f"pH           : {ph_value:.2f}")
-    print(f"Milk Yield   : {milk_yield:.2f} L")
 
-    print()
-    print("AVAILABLE FEATURES")
-    print("------------------------------")
+    # --------------------------------------------------------
+    # OLD CONSOLE OUTPUT — KEPT FOR FUTURE USE
+    # --------------------------------------------------------
 
-    for key, value in available_features.items():
-        print(f"{key}: {value}")
+    # print(f"Cow ID       : {active_cow_id}")
+    # print(f"Device ID    : {data.device_id}")
+    # print(f"Estimated TDS: {estimated_tds:.2f} ppm")
+    # print(f"Conductivity : {conductivity:.4f} mS/cm")
+    # print(f"pH           : {ph_value:.2f}")
+    # print(f"Milk Yield   : {milk_yield:.2f} L")
 
-    print()
-    print("==============================")
-    print("       MASTITIS RISK")
-    print("==============================")
-    print(
-        f"Risk     : "
-        f"{prediction.get('overall_mastitis_risk_pct')}%"
-    )
-    print(
-        f"Status   : "
-        f"{prediction.get('health_status')}"
-    )
-    print(
-        f"Urgency  : "
-        f"{prediction.get('action_urgency')}"
-    )
-    print(
-        f"Forecast : "
-        f"{prediction.get('forecast_days_to_clinical_onset')}"
-    )
+    # print()
+    # print("AVAILABLE FEATURES")
+    # print("------------------------------")
 
-    factors = prediction.get("top_contributing_factors", [])
+    # for key, value in available_features.items():
+    #     print(f"{key}: {value}")
 
-    if factors:
-        print()
-        print("Risk factors:")
+    # print()
+    # print("==============================")
+    # print("       MASTITIS RISK")
+    # print("==============================")
 
-        for factor in factors:
-            print(f" - {factor}")
+    # print(
+    #     f"Risk     : "
+    #     f"{prediction.get('overall_mastitis_risk_pct')}%"
+    # )
 
-    print("==============================")
+    # print(
+    #     f"Status   : "
+    #     f"{prediction.get('health_status')}"
+    # )
+
+    # print(
+    #     f"Urgency  : "
+    #     f"{prediction.get('action_urgency')}"
+    # )
+
+    # print(
+    #     f"Forecast : "
+    #     f"{prediction.get('forecast_days_to_clinical_onset')}"
+    # )
+
+    # factors = prediction.get("top_contributing_factors", [])
+
+    # if factors:
+    #     print()
+    #     print("Risk factors:")
+
+    #     for factor in factors:
+    #         print(f" - {factor}")
+
+    # print("==============================")
+
 
     # --------------------------------------------------------
     # 9. Return JSON-safe response
     # --------------------------------------------------------
+
     response = {
         "success": True,
 
@@ -438,4 +508,5 @@ def receive_sensor_data(data: SensorData):
     }
 
     latest_sensor_state = response
+
     return make_json_safe(response)
